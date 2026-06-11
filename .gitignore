@@ -1,0 +1,16 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+
+# MkDocs
+site/
+.cache/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Local environment
+.env
