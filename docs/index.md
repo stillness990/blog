@@ -4,7 +4,7 @@ hide:
   - navigation
 ---
 
-# 王伟的技术博客与知识库
+# ww的技术博客与知识库
 
 欢迎来到我的个人技术网站。这里会长期记录 AI Agent、Claude Code、OpenAI Codex、Python、FastAPI、Linux、Android、自动化工具和项目实战经验。
 

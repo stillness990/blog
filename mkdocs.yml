@@ -1,11 +1,11 @@
-site_name: 王伟的技术博客与知识库
+site_name: ww的技术博客与知识库
 site_description: AI Agent、Claude Code、Python、FastAPI、Linux、Android 与自动化工具实践记录
 site_url: https://stillness990.github.io/blog/
 repo_name: stillness990/blog
 repo_url: https://github.com/stillness990/blog
 edit_uri: edit/main/docs/
 
-copyright: Copyright &copy; 2026 王伟
+copyright: Copyright &copy; 2026 ww
 
 theme:
   name: material

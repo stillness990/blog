@@ -1,4 +1,4 @@
-# 王伟的技术博客与知识库
+# ww的技术博客与知识库
 
 这是一个基于 [MkDocs Material](https://squidfunk.github.io/mkdocs-material/) 构建的个人官网、技术博客、学习笔记、知识库和项目展示平台。
 
