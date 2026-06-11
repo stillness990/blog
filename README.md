@@ -54,3 +54,29 @@ https://stillness990.github.io/blog/
 ```
 
 如果使用 Cloudflare 自定义域名，请在 `mkdocs.yml` 中把 `site_url` 改为你的正式域名。
+
+## 本地自动同步（可选）
+
+启用后，本地文档变更会在 1 分钟内自动提交并推送到 GitHub，触发 GitHub Actions 自动更新网站。
+
+### 使用 systemd（推荐，开机自启）
+
+```bash
+./scripts/install-auto-sync.sh
+systemctl --user start blog-auto-sync
+```
+
+### 直接运行（前台进程）
+
+```bash
+./scripts/auto-sync.sh
+```
+
+脚本支持以下环境变量：
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `BLOG_SYNC_INTERVAL_SECONDS` | `60` | 检测间隔（秒） |
+| `BLOG_SYNC_DEBOUNCE_SECONDS` | `10` | 变化后等待合并连续修改（秒） |
+| `BLOG_SYNC_COMMIT_PREFIX` | `Update blog content` | 提交信息前缀 |
+| `BLOG_SYNC_LOG_FILE` | `.auto-sync.log` | 日志文件路径 |
