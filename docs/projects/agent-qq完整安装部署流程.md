@@ -614,7 +614,449 @@ logs/agent-qq.log
 | `agents/` | 多 Agent 预留接口 |
 | `tests/` | 测试用例 |
 
-## 15. 最小可执行部署清单
+## 15. 从零复现标准流程
+
+本节按“全新机器 + 已安装 NapCat/QQ + 已有 Claude Code 账号”的视角描述完整复现路径。前面的章节解释原因，本节给出可以照抄执行的顺序。
+
+### 15.1 复现前确认信息
+
+开始前先确认以下信息，后续配置会用到：
+
+| 信息 | 示例 | 获取方式 |
+|---|---|---|
+| 机器人 QQ 号 | `<bot_qq_id>` | 用于登录 NapCat QQ |
+| 管理员 QQ 号 | `<admin_qq_id>` | 你的个人 QQ，用于接收 `/code`、`/shell` 等管理员能力 |
+| OneBot WebSocket 地址 | `ws://127.0.0.1:3001` 或 `ws://host.docker.internal:3001` | NapCat WebUI 的 OneBot v11 WebSocket Server 配置 |
+| OneBot access token | 可为空 | NapCat OneBot 配置中如填写 token，这里必须一致 |
+| Claude Code 配置目录 | `/home/ww/.claude` | 宿主机上执行 `claude` 后生成的配置目录 |
+| agent-qq 工作目录 | `/workspace` 或项目目录 | Claude Code 执行任务时所在目录 |
+
+> 说明：`ADMIN_QQ_IDS` 配置的是“允许使用管理员命令的发送方 QQ”，不是机器人 QQ。
+
+### 15.2 第一步：配置并验证 NapCat
+
+1. 启动 NapCat QQ，并用机器人 QQ 号完成登录。
+2. 打开 NapCat WebUI，启用 OneBot v11 WebSocket Server。
+3. 推荐配置如下：
+
+   ```text
+   Host: 0.0.0.0
+   Port: 3001
+   Access Token: 可先留空；生产环境建议填写随机长字符串
+   ```
+
+4. 保存后确认端口监听：
+
+   ```bash
+   ss -ltn | grep 3001
+   ```
+
+   预期能看到 `3001` 处于监听状态。
+
+5. 如果使用 Docker 部署 agent-qq，NapCat 的 Host 不建议只绑定 `127.0.0.1`，否则容器可能无法访问宿主机端口。
+
+### 15.3 第二步：配置并验证 Claude Code CLI
+
+在宿主机执行：
+
+```bash
+claude --version
+claude -p "你好，请只回复 OK"
+```
+
+预期：
+
+- 第一条命令能输出 Claude Code 版本。
+- 第二条命令能正常返回内容。
+
+如果没有登录，请先在宿主机完成 Claude Code 登录和模型配置。agent-qq 只调用 `claude -p`，不会在 Python 代码里读取 Anthropic API Key，也不会直接选择模型。
+
+### 15.4 第三步：准备项目目录
+
+```bash
+git clone https://github.com/<your-github-user>/agent-qq.git
+cd agent-qq
+cp .env.example .env
+mkdir -p logs workspace
+```
+
+`logs` 很重要：本地直接运行 `python bot.py` 时，程序会写入 `logs/agent-qq.log`。如果目录不存在，日志文件初始化可能失败。
+
+### 15.5 第四步：填写 `.env`
+
+#### Docker 部署推荐 `.env`
+
+```env
+ONEBOT_WS_URL=ws://host.docker.internal:3001
+ONEBOT_ACCESS_TOKEN=
+ENABLE_PRIVATE_CHAT=true
+ADMIN_QQ_IDS=你的管理员QQ号
+
+CLAUDE_CLI_COMMAND=claude
+CLAUDE_TIMEOUT_SECONDS=180
+CLAUDE_WORKDIR=/workspace
+CLAUDE_CONFIG_DIR=/home/your-user/.claude
+
+ENABLE_SHELL_COMMAND=true
+SHELL_ALLOWED_PREFIXES=pwd,ls,git status,python --version,python3 --version,df -h,free -h,whoami,uname -a
+
+MESSAGE_DEDUPE_TTL_SECONDS=300
+LOG_LEVEL=INFO
+RECONNECT_INITIAL_SECONDS=2
+RECONNECT_MAX_SECONDS=60
+QQ_REPLY_CHUNK_SIZE=1800
+```
+
+#### 宿主机本地运行推荐 `.env`
+
+```env
+ONEBOT_WS_URL=ws://127.0.0.1:3001
+ONEBOT_ACCESS_TOKEN=
+ENABLE_PRIVATE_CHAT=true
+ADMIN_QQ_IDS=你的管理员QQ号
+
+CLAUDE_CLI_COMMAND=claude
+CLAUDE_TIMEOUT_SECONDS=180
+CLAUDE_WORKDIR=/path/to/agent-qq/workspace
+CLAUDE_CONFIG_DIR=/home/your-user/.claude
+
+ENABLE_SHELL_COMMAND=true
+SHELL_ALLOWED_PREFIXES=pwd,ls,git status,python --version,python3 --version,df -h,free -h,whoami,uname -a
+
+MESSAGE_DEDUPE_TTL_SECONDS=300
+LOG_LEVEL=INFO
+RECONNECT_INITIAL_SECONDS=2
+RECONNECT_MAX_SECONDS=60
+QQ_REPLY_CHUNK_SIZE=1800
+```
+
+变量细节：
+
+| 变量 | 默认值 | 是否必须 | 说明 |
+|---|---|---:|---|
+| `ONEBOT_WS_URL` | `ws://127.0.0.1:3001` | 是 | OneBot v11 WebSocket 地址。Docker 容器访问宿主机通常用 `host.docker.internal`。 |
+| `ONEBOT_ACCESS_TOKEN` | 空 | 否 | 如果 NapCat 配置了 token，程序会以 `Authorization: Bearer <token>` 连接。 |
+| `ENABLE_PRIVATE_CHAT` | `true` | 否 | 当前版本只处理私聊；设为 `false` 后不会响应私聊。 |
+| `ADMIN_QQ_IDS` | 空集合 | 强烈建议 | 多个 QQ 号用英文逗号分隔，例如 `111,222`。 |
+| `CLAUDE_CLI_COMMAND` | `claude` | 否 | Claude Code CLI 命令名；如果不在 PATH，可填绝对路径。 |
+| `CLAUDE_TIMEOUT_SECONDS` | `180` | 否 | `/ask`、`/code`、`/shell` 等命令的超时时间。 |
+| `CLAUDE_WORKDIR` | `/workspace` | 否 | Claude Code 和 `/shell` 执行目录；程序会自动创建该目录。 |
+| `CLAUDE_CONFIG_DIR` | 无代码默认值 | Docker 必填 | `docker-compose.yml` 用它把宿主机 `.claude` 挂载到容器 `/root/.claude:ro`。 |
+| `ENABLE_SHELL_COMMAND` | `false` | 否 | 是否启用 `/shell`；`.env.example` 为演示设置成 `true`，生产按需开启。 |
+| `SHELL_ALLOWED_PREFIXES` | `pwd,ls` | 使用 `/shell` 时必填 | `/shell` 白名单前缀，多个用英文逗号分隔。 |
+| `MESSAGE_DEDUPE_TTL_SECONDS` | `300` | 否 | 消息去重时间窗口，避免 OneBot 重推导致重复执行。 |
+| `LOG_LEVEL` | `INFO` | 否 | 日志级别：`DEBUG`、`INFO`、`WARNING`、`ERROR`。 |
+| `RECONNECT_INITIAL_SECONDS` | `2` | 否 | OneBot 断线后首次重连等待秒数。 |
+| `RECONNECT_MAX_SECONDS` | `60` | 否 | OneBot 指数退避重连最大等待秒数。 |
+| `QQ_REPLY_CHUNK_SIZE` | `1800` | 否 | QQ 单条回复分段长度，长回答会分多条私聊发送。 |
+
+### 15.6 第五步：先做链路预检
+
+安装依赖后可以先检查 OneBot 连接，不必启动完整机器人：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python scripts/check_onebot.py
+```
+
+如果 `.env` 中的地址不是当前要测的地址，可以覆盖：
+
+```bash
+python scripts/check_onebot.py --url ws://127.0.0.1:3001
+python scripts/check_onebot.py --url ws://127.0.0.1:3001 --token 你的token
+```
+
+预期输出：
+
+```text
+ok: connected to ws://127.0.0.1:3001
+```
+
+还可以让机器人 QQ 主动给管理员 QQ 发一条测试私聊：
+
+```bash
+python scripts/send_test_private_msg.py --to 你的管理员QQ号 --message "agent-qq OneBot 推送测试"
+```
+
+如果 NapCat 配置了 token：
+
+```bash
+python scripts/send_test_private_msg.py --to 你的管理员QQ号 --token 你的token
+```
+
+### 15.7 第六步：选择一种启动方式
+
+#### 方式 A：本地前台运行，适合调试
+
+```bash
+source .venv/bin/activate
+python bot.py
+```
+
+看到类似日志即表示连接成功：
+
+```text
+Connected to OneBot: ws://127.0.0.1:3001
+```
+
+#### 方式 B：本地脚本启动，适合桌面环境
+
+项目提供 `scripts/start_agent_qq.sh`，会尝试启动 NapCat，等待 WebUI 和 OneBot 端口，再启动 bot：
+
+```bash
+chmod +x scripts/start_agent_qq.sh
+scripts/start_agent_qq.sh background
+```
+
+前台运行：
+
+```bash
+scripts/start_agent_qq.sh --foreground
+```
+
+可覆盖的常用变量：
+
+```bash
+PYTHON_BIN=/path/to/agent-qq/.venv/bin/python \
+NAPCAT_LAUNCHER=$HOME/.local/bin/napcat-qq \
+ONEBOT_PORT=3001 \
+WEBUI_PORT=6099 \
+WAIT_SECONDS=180 \
+scripts/start_agent_qq.sh background
+```
+
+脚本日志：
+
+```text
+logs/napcat.stdout.log
+logs/agent-qq.stdout.log
+logs/agent-qq.log
+```
+
+#### 方式 C：Docker Compose 运行，适合服务器长期部署
+
+```bash
+docker compose up -d --build
+```
+
+查看状态和日志：
+
+```bash
+docker compose ps
+docker compose logs -f agent-qq
+```
+
+当前 `docker-compose.yml` 已包含：
+
+```yaml
+extra_hosts:
+  - "host.docker.internal:host-gateway"
+volumes:
+  - ./logs:/app/logs
+  - ./plugins:/app/plugins
+  - ./agents:/app/agents
+  - ${CLAUDE_CONFIG_DIR:-$HOME/.claude}:/root/.claude:ro
+```
+
+如果希望容器内 `/workspace` 的 Claude Code 工作区持久化，建议额外增加：
+
+```yaml
+volumes:
+  - ./workspace:/workspace
+```
+
+否则 `/workspace` 会在容器文件系统内自动创建，重建容器后其中内容可能丢失。
+
+### 15.8 第七步：QQ 端验证
+
+用管理员 QQ 私聊机器人 QQ，依次发送：
+
+```text
+/help
+```
+
+预期返回命令列表。
+
+```text
+/status
+```
+
+预期返回：
+
+- `agent-qq 正常运行`
+- 当前用户是否管理员
+- 私聊支持状态
+- Shell 命令启用状态
+- Claude Code CLI 检查结果
+
+继续测试 Claude 链路：
+
+```text
+/ask 你好，请只回复 OK
+```
+
+预期返回 Claude Code CLI 生成的回答。
+
+如果配置了管理员 QQ，可以继续测试管理员命令：
+
+```text
+/log
+/shell pwd
+/code 请生成一个最小 Python hello world 示例，只需要给代码块
+```
+
+注意：普通私聊文本如果不带命令，也会被当作问题交给 Claude Code CLI。
+
+### 15.9 复现成功判定
+
+满足以下条件即可认为部署复现成功：
+
+1. NapCat QQ 登录在线。
+2. OneBot v11 WebSocket 端口可连接。
+3. `scripts/check_onebot.py` 输出 `ok`。
+4. `claude -p "你好"` 在宿主机可正常执行。
+5. agent-qq 日志出现 `Connected to OneBot`。
+6. QQ 私聊 `/help` 能返回命令帮助。
+7. QQ 私聊 `/status` 能显示 Claude Code CLI 可用。
+8. QQ 私聊 `/ask 你好` 能返回模型回答。
+
+## 16. 发布前脱敏与仓库上传流程
+
+将项目发布到公开或半公开仓库前，必须先在副本中脱敏，不要直接把运行目录原样推送。
+
+### 16.1 必须排除的本地运行文件
+
+以下文件或目录不应进入发布仓库：
+
+```text
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+logs/*.log
+logs/*.log.*
+guild1.db*
+napcat_*.json
+.claude/settings.local.json
+```
+
+说明：
+
+- `.env` 可能包含 OneBot token、管理员 QQ 号、真实路径。
+- `guild1.db*` 是 NapCat/QQ 运行数据库，可能包含账号、群、联系人或消息相关数据。
+- `logs/` 可能包含 QQ 号、消息内容、错误堆栈和本机路径。
+- `.claude/settings.local.json` 是本机 Claude Code 的本地设置，不应发布。
+- `.venv/`、`__pycache__/`、`.pytest_cache/` 是构建/缓存产物，不应发布。
+
+### 16.2 推荐复制命令
+
+复制到发布目录时建议使用 `rsync` 排除敏感和缓存文件：
+
+```bash
+rsync -a --delete \
+  --exclude '.git/' \
+  --exclude '.env' \
+  --exclude '.venv/' \
+  --exclude '__pycache__/' \
+  --exclude '.pytest_cache/' \
+  --exclude 'logs/*.log' \
+  --exclude 'logs/*.log.*' \
+  --exclude 'guild1.db*' \
+  --exclude 'napcat_*.json' \
+  --exclude '.claude/settings.local.json' \
+  ./ /media/ww/d1f01292-c940-497e-8051-a0b76acd008c/agent-qq/
+```
+
+如果目标目录本身就是 Git 仓库，复制完成后在目标目录执行检查：
+
+```bash
+git status --short
+git diff -- . ':!*.log'
+```
+
+### 16.3 脱敏检查命令
+
+发布前建议至少检查这些模式：
+
+```bash
+rg -n "(sk-ant|ANTHROPIC_API_KEY|access_token|ONEBOT_ACCESS_TOKEN|ADMIN_QQ_IDS|password|secret|token|Bearer|[0-9]{6,})" . -S --glob '!agent-qq完整安装部署流程.md'
+find . -name '__pycache__' -o -name '*.pyc' -o -name '.env' -o -name 'guild1.db*'
+```
+
+命中不一定都是敏感信息，例如源码中的变量名或文档里的占位符可以保留；但真实 token、真实 QQ 号、真实路径、日志和数据库必须移除或改成占位符。
+
+### 16.4 发布前验证
+
+在脱敏后的目录中执行：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pytest
+```
+
+如果只验证 Docker 构建：
+
+```bash
+docker compose build
+```
+
+最后再提交和推送：
+
+```bash
+git add .
+git commit -m "chore: publish sanitized agent-qq"
+git push
+```
+
+## 17. 重要实现细节
+
+### 17.1 消息处理与去重
+
+`bot.py` 接收 OneBot 事件后会异步创建处理任务，避免一个 Claude Code 请求阻塞后续 WebSocket 消息接收。消息去重键为：
+
+```text
+<message_type>:<user_id>:<message_id>
+```
+
+`MESSAGE_DEDUPE_TTL_SECONDS` 控制去重缓存时间，默认 300 秒。
+
+### 17.2 OneBot 鉴权方式
+
+如果配置了 `ONEBOT_ACCESS_TOKEN`，WebSocket 连接时会使用：
+
+```http
+Authorization: Bearer <ONEBOT_ACCESS_TOKEN>
+```
+
+因此 NapCat 侧 token 和 `.env` 必须完全一致。
+
+### 17.3 Claude Code 调用方式
+
+`claude_client.py` 会构造：
+
+```bash
+claude -p '<用户问题或封装后的代码任务提示>'
+```
+
+- `/ask` 直接传入用户问题。
+- 普通私聊文本等同于 `/ask`。
+- `/code` 会额外加上“谨慎代码助手”的提示，且仅管理员可用。
+- 超时由 `CLAUDE_TIMEOUT_SECONDS` 控制。
+- 执行目录由 `CLAUDE_WORKDIR` 控制。
+
+### 17.4 日志位置
+
+| 运行方式 | 日志位置 |
+|---|---|
+| Python 前台运行 | 控制台 + `logs/agent-qq.log` |
+| `start_agent_qq.sh background` | `logs/agent-qq.stdout.log` + `logs/agent-qq.log` |
+| Docker Compose | `docker compose logs -f agent-qq` + `logs/agent-qq.log` |
+
+## 18. 最小可执行部署清单
 
 如果只需要快速部署，按以下顺序执行：
 
