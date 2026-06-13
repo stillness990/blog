@@ -117,7 +117,7 @@ nav:
   - 项目:
       - projects/index.md
       - 位置推送系统: projects/location-push-system.md
-      - agent-qq 完整安装部署流程: projects/agent-qq完整安装部署流程.md
+      - agent-qq 完整安装部署流程: projects/agent-qq-complete-sop.md
   - 学习笔记:
       - notes/index.md
       - Python: notes/python.md
