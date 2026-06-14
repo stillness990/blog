@@ -117,7 +117,11 @@ nav:
   - 项目:
       - projects/index.md
       - 位置推送系统: projects/location-push-system.md
-      - agent-qq 完整安装部署流程: projects/agent-qq-complete-sop.md
+      - skill-os-complete SOP: projects/skill-os-complete-sop.md
+      - agent-qq QQ AI Agent:
+          - projects/agent-qq/index.md
+          - 部署指南: projects/agent-qq/deployment-guide.md
+          - 升级与测试报告: projects/agent-qq/v2.0.1-upgrade-and-test.md
   - 学习笔记:
       - notes/index.md
       - Python: notes/python.md
