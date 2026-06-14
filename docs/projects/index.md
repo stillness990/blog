@@ -29,3 +29,7 @@
 ## 项目列表
 
 - [位置推送系统](location-push-system.md)
+- [skill-os-complete 系统 SOP](skill-os-complete-sop.md)
+- [agent-qq — QQ AI Agent 网关](agent-qq/index.md)
+    - [完整部署指南](agent-qq/deployment-guide.md)
+    - [v2.0.1 升级与测试报告](agent-qq/v2.0.1-upgrade-and-test.md)
