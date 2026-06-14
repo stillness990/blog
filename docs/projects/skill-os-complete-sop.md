@@ -1,98 +1,81 @@
-# SOP：skill-os-complete 技能路由系统
+# skill-os-complete
 
-| 字段 | 内容 |
-|---|---|
-| 文档类型 | SOP / 操作手册 |
-| 生成时间 | 2026-06-14 |
-| 适用系统 | skill-os-complete |
-| 安装位置 | `<项目根目录>/.claude/` |
-| 核心组件 | `skill-router.py`、`skill-rules.json`、`settings.json`、5 个技能定义文件 |
-| 适用场景 | 首次安装后日常使用、添加新技能、故障排查 |
+**Claude Code 自动技能路由系统** — 零延迟、纯本地、关键字驱动的技能自动注入引擎。
 
----
+在 Claude Code 中输入文字时，Hook 自动分析内容并注入对应技能指令，让 Claude 按预定义规范回答。无需切换模式、无需手动选择技能。
 
-## 1. 系统架构
-
-### 1.1 工作原理
+## 工作原理
 
 ```text
 你在 Claude Code 中输入文字
   ↓
 UserPromptSubmit Hook 触发
   ↓
-skill-router.py 读取输入
+skill-router.py 读取输入 → 对照 skill-rules.json 打分
   ↓
-对照 skill-rules.json 中的关键词和正则打分
+选中得分最高的技能 → 自动注入 SKILL.md 规范
   ↓
-得分最高且有关键词命中的技能被选中
-  ↓
-自动注入技能指令，Claude 按该技能的 SKILL.md 规范回答
-  ↓
-（无命中）不注入，正常对话
+Claude 按规范回答（无命中则正常对话）
 ```
 
-### 1.2 打分规则
+## 快速安装
 
-| 匹配方式 | 得分 | 说明 |
-|---|---|---|
-| 基础优先级 | `priority` 字段值 | 仅兜底，**不算命中** |
-| 关键词命中 | 每个 +2 | `keywords` 列表匹配 |
-| 正则命中 | 每个 +3 | `intentPatterns` 列表匹配 |
+```bash
+# 1. 克隆项目
+git clone https://github.com/stillness990/skill-os-complete.git
 
-> 必须有关键词或正则命中（得分 > 基础分），技能才会触发。纯靠基础分不会触发。
+# 2. 进入你的项目目录
+cd /path/to/your-project
 
-### 1.3 关键文件
+# 3. 运行安装脚本
+bash /path/to/skill-os-complete/install.sh
+```
 
-| 文件 | 用途 |
-|---|---|
-| `.claude/settings.json` | Hook 注册入口（UserPromptSubmit 含 skill-router） |
-| `.claude/skill-rules.json` | 路由关键词规则，定义每个技能的匹配方式 |
-| `.claude/hooks/skill-router.py` | 自动路由脚本，打分并注入技能指令 |
-| `.claude/skills/<技能名>/SKILL.md` | 各技能的行为规范定义 |
-| `CLAUDE.md` | 项目说明，列出可用技能 |
+安装脚本自动完成：
+- 复制 `.claude/` 到项目目录
+- 设置执行权限
+- 验证 JSON 格式
+- 运行 6 项路由测试
 
----
+## 内置技能（6 个）
 
-## 2. 可用技能一览
+| 技能 | 优先级 | 触发方式 | 作用 |
+|------|--------|---------|------|
+| `echo` | 1 | `echo xxx`、`重复`、`原样` | 原样返回输入，调试验证 |
+| `summarize` | 2 | `总结`、`摘要`、`概括`、`summarize` | 提炼 3~7 条核心要点 + 一句话总结 |
+| `code_assistant` | 3 | `debug`、`bug`、`修复`、`实现`、`报错` | 结构化输出：问题分析 → 代码 → 说明 |
+| `sop` | 2 | `写手册`、`怎么处理`、`SOP`、`操作手册` | 生成标准操作步骤（步骤 + 预期 + 分支） |
+| `debug_log` | 2 | `解决了`、`留档`、`排查记录` | 自动生成 `debug-logs/` 目录 + `.md` 文件 |
+| `sanitize` | 2 | `脱敏`、`消毒`、`sanitize`、`安全发布` | 扫描替换敏感信息 + 一键发布到 GitHub |
 
-| 技能 | 优先级 | 触发方式（示例） | 效果 |
-|---|---|---|---|
-| `echo` | 1 | `echo xxx`、`重复`、`原样` | 原样返回输入，用于调试验证 |
-| `summarize` | 2 | `总结`、`摘要`、`概括`、`summarize` | 长内容压缩为 3~7 条核心要点 + 一句话总结 |
-| `code_assistant` | 3 | `debug`、`bug`、`修复代码`、`报错`、`实现` | 结构化输出：问题分析 → 修复代码 → 说明 |
-| `sop` | 2 | `写手册`、`怎么处理`、`操作手册`、`SOP` | 生成标准操作步骤（步骤 + 预期 + 分支判断） |
-| `debug_log` | 2 | `解决了`、`留档`、`排查记录`、`保存记录` | 自动生成 `debug-logs/YYYY-MM-DD_关键词.md` 文件 |
+## 使用方式
 
----
+### 触发技能
 
-## 3. 日常使用
-
-### 3.1 触发技能
-
-在输入中自然包含关键词，技能自动匹配：
+输入中自然包含关键词即可，无需特殊前缀：
 
 | 你想做的事 | 这样说 |
-|---|---|
-| 原样重复 | `echo 这段配置内容原样输出` |
+|-----------|--------|
+| 原样输出 | `echo 这段配置内容原样输出` |
 | 总结文章 | `总结一下这篇文章的核心内容` |
 | 修复代码 | `帮我 debug 这段代码，一直报 KeyError` |
 | 写操作手册 | `数据库连接失败怎么处理，帮我写操作手册` |
 | debug 留档 | `问题解决了，帮我记录这次排查过程留档` |
+| 项目脱敏 | `帮我对这个项目做脱敏处理，准备发布` |
 | 正常聊天 | `今天天气怎么样`（不触发任何技能） |
 
-### 3.2 验证系统正常
+### 验证系统正常
 
-依次输入以下 5 句话，确认各自触发正确技能：
+依次输入以下 6 句话，确认各自触发正确技能：
 
 1. `echo 测试` → 原样返回
-2. `总结一下今天的对话` → 要点格式输出
-3. `帮我 debug 这段代码` → 问题分析 / 修复 / 说明格式
-4. `帮我写一份数据库备份的操作手册` → SOP 格式输出
-5. `问题解决了，帮我记录排查过程` → 自动生成 `debug-logs/` 目录和 `.md` 文件
+2. `总结一下今天的对话` → 要点格式
+3. `帮我 debug 这段代码` → 结构化回答
+4. `帮我写一份数据库备份的操作手册` → SOP 格式
+5. `问题解决了，帮我记录排查过程` → 生成文件
+6. `帮我对这个项目做脱敏处理` → sanitize 格式
 
----
-
-## 4. 添加新技能
+## 添加新技能
 
 ### 第一步：创建技能定义
 
@@ -121,7 +104,7 @@ description: "<一句话描述>"
 …
 ```
 
-**参考模板：** `.claude/skills/sop/SKILL.md`
+参考模板：`.claude/skills/sop/SKILL.md`
 
 ### 第二步：注册路由规则
 
@@ -137,128 +120,89 @@ description: "<一句话描述>"
 }
 ```
 
-### 第三步：验证 JSON 格式
+### 第三步：验证并测试
 
 ```bash
+# 验证 JSON 格式
 python3 -c "import json; json.load(open('.claude/skill-rules.json'))"
-```
 
-**预期：** 命令无输出 = 格式正确。
-
-### 第四步：测试路由
-
-```bash
+# 测试路由
 echo '{"prompt": "你的测试输入"}' \
   | CLAUDE_PROJECT_DIR="$(pwd)" python3 .claude/hooks/skill-router.py
 ```
 
-**预期：** 输出 JSON 中 `prompt_injection` 包含新技能名。
-
 **不需要重启 Claude Code，保存文件立即生效。**
 
----
+## 打分规则
 
-## 5. 故障排查
+| 匹配方式 | 得分 | 说明 |
+|---------|------|------|
+| 基础优先级 | `priority` 字段值 | 仅兜底，**不算命中** |
+| 关键词命中 | 每个 +2 | `keywords` 列表匹配 |
+| 正则命中 | 每个 +3 | `intentPatterns` 列表匹配 |
 
-### 5.1 技能完全不触发
+> 必须有关键词或正则命中（得分 > 基础分），技能才会触发。
 
-**操作：**
+## 故障排查
+
+### 技能完全不触发
 
 ```bash
 echo '{"prompt": "帮我 debug 这段代码"}' \
   | CLAUDE_PROJECT_DIR="$(pwd)" python3 .claude/hooks/skill-router.py
 ```
 
-**预期：** 输出中包含 `"code_assistant"` 和 `"prompt_injection"`。
+预期输出中包含 `"code_assistant"` 和 `"prompt_injection"`。
 
-**如果输出 `{}`，逐项检查：**
+如果输出 `{}`，逐项检查：
 
 | 检查项 | 命令 | 预期 |
-|---|---|---|
-| skill-router hook 已注册 | `python3 -c "import json; s=json.load(open('.claude/settings.json')); hooks=s.get('hooks',{}).get('UserPromptSubmit',[]); print('OK' if any('skill-router' in h.get('command','') for g in hooks for h in g.get('hooks',[])) else 'MISSING')"` | `OK` |
-| skill-rules.json 存在 | `ls -la .claude/skill-rules.json` | 文件存在 |
+|--------|------|------|
+| skill-rules.json 存在 | `ls .claude/skill-rules.json` | 文件存在 |
 | JSON 格式正确 | `python3 -c "import json; json.load(open('.claude/skill-rules.json')); print('OK')"` | `OK` |
 | python3 可用 | `which python3` | 路径非空 |
+| 输入包含关键词 | 检查 `skill-rules.json` 的 `keywords` | 至少命中一个 |
 
-### 5.2 误触发——不该触发时触发了
-
-打开 `.claude/skill-rules.json`，找到被误触发的技能，检查 `keywords` 列表。
-
-**典型场景：** "这个 bug 很有意思"只是闲聊，但 `bug` 命中了 `code_assistant`。
-
-**处理：**
-- 从 `keywords` 删除过于宽泛的词
-- 改用更精确的 `intentPatterns` 正则（比如要求同时出现"修复"或"debug"）
-
-### 5.3 多个技能竞争，选错了
-
-**手动测试看打分：**
+### 多个技能竞争选错了
 
 ```bash
 echo '{"prompt": "你的原话"}' \
   | CLAUDE_PROJECT_DIR="$(pwd)" python3 .claude/hooks/skill-router.py
 ```
 
-**处理：**
-- 方法 A：给期望技能加独特关键词，输入时带上
-- 方法 B：降低冲突技能的 `priority`
-- 方法 C：给期望技能加精准的 `intentPatterns`
+处理方法：
+- A：给期望技能加独特关键词
+- B：降低冲突技能的 `priority`
+- C：给期望技能加精准的 `intentPatterns` 正则
 
-### 5.4 `settings.json` 修改后 Claude Code 报错
+### 误触发（不该触发时触发了）
 
-JSON 格式损坏（多了逗号、少了引号）。
+找到被误触发的技能，检查 `keywords` 列表。删除过于宽泛的关键词，改用更精确的正则。
 
-**修复：**
+### JSON 格式损坏
 
 ```bash
 python3 -c "import json; json.load(open('.claude/settings.json'))"
 ```
 
-根据报错行号定位并修正。如果完全损坏，从备份恢复：
+根据报错行号修正。如果完全损坏，从备份恢复：
 
 ```bash
 ls .claude/backups/
 cp .claude/backups/<最新备份> .claude/settings.json
 ```
 
----
+## 常见错误速查
 
-## 6. 常见错误
-
-| 错误现象 | 原因 | 处理方法 |
-|---|---|---|
-| 技能不触发，输出 `{}` | 输入未匹配任何关键词或正则 | 检查输入是否包含 `skill-rules.json` 中定义的关键词 |
+| 现象 | 原因 | 处理 |
+|------|------|------|
+| 技能不触发，输出 `{}` | 输入未匹配任何关键词 | 检查输入是否包含 `skill-rules.json` 中的关键词 |
 | `settings.json` 报错 | JSON 格式损坏 | `python3 -c "import json; json.load(...)"` 定位语法错误 |
-| `skill-router.py` 报 `No such file` | Hook 命令路径不对 | 确认 `UserPromptSubmit` 中 command 为 `python3 $CLAUDE_PROJECT_DIR/.claude/hooks/skill-router.py` |
-| `python3: command not found` | 系统未装 python3 | `which python3`，如果用的是 `python` 则修改 settings.json 中的命令 |
-| 新增技能不生效 | 文件名或路径不对 | 确认 `SKILL.md` 在 `.claude/skills/<技能名>/` 下，且目录名与 `skill-rules.json` 的 key 一致 |
-| `debug_log` 没生成文件 | `debug-logs/` 目录创建失败 | 手动创建：`mkdir -p debug-logs` |
-| 多个 hook 冲突 | 修改 settings.json 时覆盖了原有 hooks | 修改前先 `diff` 确认变更范围，确保其他 hook 条目未被删除 |
+| `skill-router.py` 报 `No such file` | Hook 路径不对 | 确认 `UserPromptSubmit` 中 command 正确 |
+| 新增技能不生效 | 文件名或路径不对 | 确认目录名与 `skill-rules.json` 的 key 一致 |
+| QQ 通知 Hook 丢失 | 修改 settings.json 时覆盖了原有 hooks | 检查 `UserPromptSubmit` 中是否保留了 QQ 通知 hook |
 
----
-
-## 7. 配置管理
-
-### 7.1 settings.json Hook 最小结构
-
-`.claude/settings.json` 中 `UserPromptSubmit` 的 skill-router hook 结构：
-
-```json
-"UserPromptSubmit": [
-  {
-    "hooks": [
-      {
-        "command": "python3 $CLAUDE_PROJECT_DIR/.claude/hooks/skill-router.py",
-        "type": "command"
-      }
-    ]
-  }
-]
-```
-
-如果你有其他 hook（如通知、日志等），将 skill-router 追加到同一个 hooks 数组中，不要覆盖原有条目。
-
-### 7.2 备份与恢复
+## 备份与恢复
 
 settings.json 有自动备份：
 
@@ -272,11 +216,9 @@ ls .claude/backups/
 cp .claude/backups/.claude.json.backup.<最新时间戳> .claude/settings.json
 ```
 
-### 7.3 回滚技能路由
+## 回滚/卸载
 
-**禁用技能路由：**
-
-删除 `UserPromptSubmit` 中 skill-router 对应的那条 hook。
+**仅禁用技能路由：** 删除 `UserPromptSubmit` 中 skill-router 对应的 hook。
 
 **完全移除：**
 
@@ -288,36 +230,31 @@ rm -rf .claude/skills
 
 然后手动编辑 `settings.json`，移除 skill-router 对应的 hook 条目。
 
----
+## 项目结构
 
-## 8. 最后验证
-
-全部配置完成后，依次执行：
-
-1. 路由功能测试（5 项）：
-
-```bash
-run_test() { local d="$1" p="$2" e="$3"; R=$(echo "{\"prompt\":\"$p\"}" | CLAUDE_PROJECT_DIR="$(pwd)" python3 .claude/hooks/skill-router.py 2>&1); if echo "$R" | grep -q "$e"; then echo "  ✓ $d"; else echo "  ✗ $d -> $R"; fi; }
-run_test "echo"      "echo 测试"                                    "echo"
-run_test "summarize" "总结一下"                                     "summarize"
-run_test "code"      "帮我 debug 这段代码"                          "code_assistant"
-run_test "sop"       "数据库连接失败怎么处理"                       "sop"
-run_test "debug_log" "问题解决了请帮我记录"                         "debug_log"
+```text
+skill-os-complete/
+├── CLAUDE.md                           # 项目说明
+├── install.sh                          # 一键安装脚本
+├── .gitignore
+├── docs/
+│   └── skill-os-complete-sop.md        # 完整操作手册
+└── .claude/
+    ├── settings.json                   # Hook 注册入口
+    ├── skill-rules.json                # 路由关键词规则
+    ├── hooks/
+    │   └── skill-router.py             # 自动路由脚本
+    └── skills/
+        ├── echo/SKILL.md
+        ├── summarize/SKILL.md
+        ├── code_assistant/SKILL.md
+        ├── sop/SKILL.md
+        ├── debug_log/SKILL.md
+        └── sanitize/
+            ├── SKILL.md
+            └── sanitize.py             # 脱敏扫描与发布脚本
 ```
 
-预期：5 项全部 `✓`。
+## License
 
-2. JSON 格式验证：
-
-```bash
-python3 -c "import json; json.load(open('.claude/settings.json')); print('settings.json OK')"
-python3 -c "import json; json.load(open('.claude/skill-rules.json')); print('skill-rules.json OK')"
-```
-
-预期：两行 `OK`。
-
----
-
-## 9. 标签
-
-`skill-os-complete` `技能路由` `ClaudeCode` `Hook` `SOP` `skill-router` `故障排查` `配置管理`
+MIT
